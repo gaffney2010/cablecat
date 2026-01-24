@@ -1,0 +1,9 @@
+Package: cablecat-wiki
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: pandoc (>= 3.1.11), w3m (>= 0.5.3), curl, jq
+Maintainer: CableCat <user@example.com>
+Description: A command-line Wikipedia viewer
+ Downloads Wikipedia pages, converts them to HTML, and opens them in w3m.

@@ -1,0 +1,9 @@
+# Build artifacts
+*.deb
+
+# Generated binary in debian structure
+wiki/debian/usr/bin/cablecat-wiki
+
+# Temporary files from script (though script handles them)
+page.wiki
+page.html
