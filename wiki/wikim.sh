@@ -19,20 +19,12 @@ fi
 TITLE="$1"
 [ -z "$TITLE" ] && echo "Usage: $0 <Wiki_Title>" && exit 1
 
-# ENABLE MOUSE for easier pane switching in nested sessions
-tmux set -g mouse on 2>/dev/null
-
 # Load configuration (sync with wiki.sh)
-CACHE_DIR="/var/cache/cablecat-wiki"
 if [ -f "/etc/cablecat/cablecat.conf" ]; then
     set -a
     source "/etc/cablecat/cablecat.conf"
     set +a
 fi
-
-# Check for custom cache dir env var as well if set by source
-TOC_FILE="$CACHE_DIR/$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//').html.toc"
-SELF=$(realpath "$0")
 
 # Cleanup hook
 cleanup() { 
