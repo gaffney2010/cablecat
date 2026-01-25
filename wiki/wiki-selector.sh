@@ -1,14 +1,12 @@
 #!/bin/bash
 # wiki-selector.sh - Selector pane for wikim
 
-# Arguments: <Target_Pane_ID> <Wiki_Title> <TOC_File (ignored)>
+# Arguments: <Target_Pane_ID> <Wiki_Title>
 TARGET_PANE="$1"
 TITLE="$2"
-# TOC_FILE is no longer used, as the downloader handles it
-# TOC_FILE="$3"
 
 if [ -z "$TARGET_PANE" ] || [ -z "$TITLE" ]; then
-    echo "Usage: $0 <Target_Pane_ID> <Wiki_Title> [TOC_File]"
+    echo "Usage: $0 <Target_Pane_ID> <Wiki_Title>"
     exit 1
 fi
 

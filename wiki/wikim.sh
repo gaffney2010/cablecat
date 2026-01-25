@@ -41,6 +41,7 @@ if [ ! -x "$SELECTOR_CMD" ]; then
     exit 1
 fi
 
+SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELECTOR_CMD $CURRENT_PANE \"$TITLE\"")
 trap "cleanup $SIDEBAR_PANE" EXIT
 
 # Find and run wiki reader
