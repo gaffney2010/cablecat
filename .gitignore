@@ -3,6 +3,7 @@
 
 # Generated binary in debian structure
 wiki/debian/usr/bin/cablecat-wiki
+wiki/debian/etc/cablecat/cablecat.conf
 
 # Temporary files from script (though script handles them)
 page.wiki

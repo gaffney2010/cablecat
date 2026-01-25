@@ -9,6 +9,27 @@ fi
 TITLE="$1"
 ENCODED_TITLE=$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//')
 
+# Check cache
+# Default configuration values
+CACHE_DIR="/var/cache/cablecat-wiki"
+
+
+# Load configuration
+# 1. System-wide default configuration
+if [ -f "/etc/cablecat/cablecat.conf" ]; then
+    # We source it to allow flexible configuration
+    source "/etc/cablecat/cablecat.conf"
+fi
+
+
+
+CACHE_FILE="$CACHE_DIR/${ENCODED_TITLE}.html"
+
+if [ -f "$CACHE_FILE" ]; then
+    w3m "$CACHE_FILE"
+    exit 0
+fi
+
 # Create a temporary directory
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
@@ -25,6 +46,11 @@ fi
 
 # Convert to HTML
 pandoc -f mediawiki -t html "$TMP_DIR/page.wiki" -o "$TMP_DIR/page.html"
+
+# Save to cache if directory exists and is writable
+if [ -d "$CACHE_DIR" ] && [ -w "$CACHE_DIR" ]; then
+    cp "$TMP_DIR/page.html" "$CACHE_FILE"
+fi
 
 # Open with w3m
 w3m "$TMP_DIR/page.html"
