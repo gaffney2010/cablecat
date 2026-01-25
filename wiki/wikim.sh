@@ -118,12 +118,14 @@ if [ -n "$TMUX" ]; then
     
     # Run wiki.sh
     script_dir=$(dirname "$(realpath "$0")")
-    if command -v cablecat-wiki &> /dev/null; then
+    if command -v wiki &> /dev/null; then
+        WIKI_CMD="wiki"
+    elif command -v cablecat-wiki &> /dev/null; then
         WIKI_CMD="cablecat-wiki"
     elif [ -f "$script_dir/wiki.sh" ]; then
         WIKI_CMD="$script_dir/wiki.sh"
     else
-        echo "Error: Could not find cablecat-wiki or wiki.sh"
+        echo "Error: Could not find wiki, cablecat-wiki or wiki.sh"
         exit 1
     fi
     
