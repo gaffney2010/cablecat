@@ -1,169 +1,130 @@
 #!/bin/bash
-
 # wikim - Split-pane Wikipedia viewer with TOC navigation
 
 # Debug logging
-LOGfile="/tmp/wikim.log"
-exec 2>>"$LOGfile"
-echo "[$(date)] Running with args: $@" >> "$LOGfile"
+LOG="/tmp/wikim.debug"
+log() { echo "[$(date '+%H:%M:%S')] $@" >> "$LOG"; }
 
-# Helper functions
-run_selector() {
-    local target_pane="$1"
-    local title="$2"
-    local toc_file="$3"
-    
-    echo "Waiting for TOC file: $toc_file" >> "$LOGfile"
-    # Wait for TOC file to be created by wiki.sh
-    while [ ! -f "$toc_file" ]; do
-        sleep 0.5
-        # Check if target pane is dead
-        if ! tmux list-panes -t "$target_pane" &>/dev/null; then
-             echo "Target pane $target_pane died, exiting selector." >> "$LOGfile"
-             exit 0
-        fi
-    done
-    echo "TOC file found." >> "$LOGfile"
-
-    while true; do
-        # Use fzf to select a section
-        # Input format: Index Title |Anchor
-        echo "Launching fzf on $toc_file" >> "$LOGfile"
-        selection=$(cat "$toc_file" | fzf --delimiter='\|' --with-nth=1 --expect=enter)
-        fzf_ret=$?
-        echo "fzf returned $fzf_ret" >> "$LOGfile"
-        
-        if [ $fzf_ret -ne 0 ]; then
-            break
-        fi
-
-        key=$(echo "$selection" | head -n1)
-        line=$(echo "$selection" | tail -n1)
-        
-        if [ -n "$line" ]; then
-            anchor=$(echo "$line" | awk -F'|' '{print $2}')
-            
-            # Send keys to the target pane
-            tmux send-keys -t "$target_pane" "v"
-            tmux send-keys -t "$target_pane" "/id=\"$anchor\"" "Enter"
-            tmux send-keys -t "$target_pane" "v"
-            tmux send-keys -t "$target_pane" "z"
-        fi
-    done
-    
-    # If we exit the loop (user quit fzf), we should close the main wiki pane too
-    cur_cmd=$(tmux display-message -p -t "$target_pane" "#{pane_current_command}" 2>/dev/null)
-    echo "Main pane cmd: $cur_cmd" >> "$LOGfile"
-    if [[ "$cur_cmd" == "w3m" ]] || [[ "$cur_cmd" == *"wiki"* ]]; then
-        tmux send-keys -t "$target_pane" "q" "y"
-    fi
-}
-
-cleanup_and_exit() {
-    local sidebar="$1"
-    echo "Cleaning up sidebar $sidebar" >> "$LOGfile"
-    tmux kill-pane -t "$sidebar" 2>/dev/null
-}
-
-# Check for internal selector mode
-if [ "$1" == "--selector" ]; then
-    echo "Entering selector mode" >> "$LOGfile"
-    echo "Target Pane: $2, Title: $3, TOC: $4" >> "$LOGfile"
-    run_selector "$2" "$3" "$4"
-    ret=$?
-    echo "Selector exited with $ret" >> "$LOGfile"
-    exit $ret
-fi
-
-if [ -z "$1" ]; then
-    echo "Usage: $0 <Wiki_Title>"
-    exit 1
-fi
-
-TITLE="$1"
-CACHE_DIR="/var/cache/cablecat-wiki"
-ENCODED_TITLE=$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//')
-TOC_FILE="$CACHE_DIR/${ENCODED_TITLE}.html.toc"
-echo "TOC File: $TOC_FILE" >> "$LOGfile"
-
-# Ensure tmux is available
-if ! command -v tmux &> /dev/null; then
-    echo "Error: tmux is required but not installed." >> "$LOGfile"
-    echo "Error: tmux is required but not installed."
-    exit 1
-fi
-
-# Ensure fzf is available
-if ! command -v fzf &> /dev/null; then
-    echo "Error: fzf is required but not installed." >> "$LOGfile"
-    echo "Error: fzf is required but not installed."
-    exit 1
-fi
-
-# Check if we are running in our isolated environment
+# 1. ISOLATION: Ensure we run in a dedicated tmux session
+#    This allows external scripts to control this instance (e.g., resizing) via the socket.
 if [ -z "$WIKIM_ISOLATED" ]; then
-    # We are NOT in the isolated environment.
-    # 1. Create a unique socket name based on PID to allow multiple independent instances if needed.
-    SOCKET_NAME="wikim_$$"
-    SOCKET_PATH="/tmp/$SOCKET_NAME" # Approximate path, tmux -L creates it usually in /tmp/tmux-<uid>/... or similar, 
-                                    # BUT -L actually specifies a socket name/path. 
-                                    # If we use a full path with -S it's explicit.
-                                    # However, -L is easier for "named" sockets relative to TMPDIR. 
-                                    # Let's use -S with an explicit path for absolute certainty and ease of saving.
+    # Create an explicit socket path so we can find it easily later
+    SOCKET="/tmp/wikim-socket-$$"
+    echo "$SOCKET" > /tmp/wikim_latest_socket
+    log "Starting isolated session on socket: $SOCKET"
     
-    REAL_SOCKET_PATH="/tmp/wikim-socket-$$"
-    
-    # 2. Save the socket path for the developer
-    echo "$REAL_SOCKET_PATH" > /tmp/wikim_latest_socket
-    
-    echo "Starting isolated wikim session..."
-    echo "Socket: $REAL_SOCKET_PATH" >> "$LOGfile"
-
-    # 3. Exec into tmux using this socket
-    # We pass the same arguments.
-    # We set WIKIM_ISOLATED=1 to prevent infinite recursion.
+    # Re-exec ourselves inside the isolated session
     export WIKIM_ISOLATED=1
-    
-    # Resolve absolute path
-    SELF=$(realpath "$0")
-    
-    # Start new session attached
-    exec tmux -S "$REAL_SOCKET_PATH" new-session "$SELF \"$TITLE\""
+    exec tmux -S "$SOCKET" new-session "$(realpath "$0") \"$1\""
 fi
 
 # =========================================================================================
 # INTERNAL LOGIC (Running inside the isolated tmux)
 # =========================================================================================
 
-# At this point, we are GUARANTEED to be inside our own dedicated tmux server (socket).
-# pane_id will likely be %0 if it's the first pane.
+TITLE="$1"
+[ -z "$TITLE" ] && echo "Usage: $0 <Wiki_Title>" && exit 1
 
-CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
+log "Internal logic started for: $TITLE"
 
-# Resolve absolute path to self
+# ENABLE MOUSE for easier pane switching in nested sessions
+tmux set -g mouse on 2>/dev/null
+
+# Load configuration (sync with wiki.sh)
+CACHE_DIR="/var/cache/cablecat-wiki"
+if [ -f "/etc/cablecat/cablecat.conf" ]; then
+    log "Loading config from /etc/cablecat/cablecat.conf"
+    set -a
+    source "/etc/cablecat/cablecat.conf"
+    set +a
+fi
+
+# Check for custom cache dir env var as well if set by source
+log "Using CACHE_DIR: $CACHE_DIR"
+
+TOC_FILE="$CACHE_DIR/$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//').html.toc"
 SELF=$(realpath "$0")
-echo "Self: $SELF" >> "$LOGfile"
 
-# Split the current pane
-# We call ourselves with --selector flag
+# Selector function (runs in the sidebar pane)
+run_selector() {
+    local target_pane="$1"
+    local toc_file="$2"
+    
+    log "Selector started. Target: $target_pane, TOC: $toc_file"
+    echo "Waiting for TOC..."
+    
+    # Wait for TOC
+    local waited=0
+    while [ ! -f "$toc_file" ]; do
+        sleep 0.2
+        waited=$((waited+1))
+        # Exit if main pane dies
+        if ! tmux list-panes -t "$target_pane" &>/dev/null; then
+             log "Target pane died. Exiting selector."
+             exit 0
+        fi
+        if [ $waited -gt 50 ]; then # Log every ~10s
+             log "Still waiting for TOC..."
+             waited=0
+        fi
+    done
+    
+    log "TOC found. Launching fzf loop."
+
+    while true; do
+        # fzf selector
+        # We cat the file. If it's empty, fzf shows 0/0.
+        selection=$(cat "$toc_file" | fzf --delimiter='\|' --with-nth=1 --expect=enter) 
+        ret=$?
+        
+        if [ $ret -ne 0 ]; then
+             log "fzf exited with code $ret. Quitting."
+             break
+        fi
+        
+        # Parse selection: "Index Title |Anchor"
+        anchor=$(echo "$selection" | tail -n1 | awk -F'|' '{print $2}')
+        log "Selected anchor: $anchor"
+        
+        if [ -n "$anchor" ]; then
+            # Control the main pane (w3m)
+            # v=toggle line number (hack to clear buffer?), /search, z=center
+            tmux send-keys -t "$target_pane" "v" "/id=\"$anchor\"" "Enter" "v" "z"
+        fi
+    done
+    
+    # If selector exits, kill the main pane
+    tmux send-keys -t "$target_pane" "q" "y" 2>/dev/null
+}
+
+# Cleanup hook
+cleanup() { 
+    log "Cleanup called for pane $1"
+    tmux kill-pane -t "$1" 2>/dev/null; 
+}
+
+# MODE CHECK: Are we the sidebar selector?
+if [ "$1" == "--selector" ]; then
+    run_selector "$2" "$4"
+    exit 0
+fi
+
+# MAIN LOGIC: Split window and start components
+CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
+log "Main pane ID: $CURRENT_PANE"
+
+# Create sidebar
 SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELF --selector $CURRENT_PANE \"$TITLE\" \"$TOC_FILE\"")
-echo "Started sidebar pane: $SIDEBAR_PANE" >> "$LOGfile"
+log "Sidebar launched: $SIDEBAR_PANE"
+trap "cleanup $SIDEBAR_PANE" EXIT
 
-# Set a trap to cleanup
-trap "cleanup_and_exit $SIDEBAR_PANE" EXIT
-
-# Run wiki.sh
-script_dir=$(dirname "$(realpath "$0")")
-if command -v wiki &> /dev/null; then
-    WIKI_CMD="wiki"
-elif command -v cablecat-wiki &> /dev/null; then
-    WIKI_CMD="cablecat-wiki"
-elif [ -f "$script_dir/wiki.sh" ]; then
-    WIKI_CMD="$script_dir/wiki.sh"
-else
-    echo "Error: Could not find wiki, cablecat-wiki or wiki.sh"
+# Find and run wiki reader
+WIKI_CMD=$(command -v wiki || command -v cablecat-wiki || echo "$(dirname "$SELF")/wiki.sh")
+if [ ! -x "$WIKI_CMD" ]; then
+    echo "Error: wikim could not find 'wiki', 'cablecat-wiki', or 'wiki.sh'"
+    log "Error: Wiki command not found"
     exit 1
 fi
 
-echo "Running Wiki CMD: $WIKI_CMD" >> "$LOGfile"
+log "Running wiki command: $WIKI_CMD"
 "$WIKI_CMD" "$TITLE"
