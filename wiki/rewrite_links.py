@@ -16,17 +16,8 @@ def main():
         # If file missing, maybe just exit.
         sys.exit(1)
 
-    # Load configuration to get port
-    port = 8080
-    config_path = "/etc/cablecat/cablecat.conf"
-    if os.path.exists(config_path):
-        with open(config_path, "r") as cf:
-            for line in cf:
-                if line.startswith("PORT="):
-                    try:
-                        port = int(line.strip().split("=")[1])
-                    except:
-                        pass
+    # Get port from environment or default
+    port = int(os.environ.get("PORT", 8080))
 
     try:
         with open(args.file, "r", encoding="utf-8") as f:

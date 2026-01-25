@@ -17,7 +17,9 @@ CACHE_DIR="/var/cache/cablecat-wiki"
 # 1. System-wide default configuration
 if [ -f "/etc/cablecat/cablecat.conf" ]; then
     # We source it to allow flexible configuration
+    set -a
     source "/etc/cablecat/cablecat.conf"
+    set +a
 fi
 
 CACHE_FILE="$CACHE_DIR/${ENCODED_TITLE}.html"
