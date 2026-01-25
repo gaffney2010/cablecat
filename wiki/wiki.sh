@@ -13,15 +13,12 @@ ENCODED_TITLE=$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//')
 # Default configuration values
 CACHE_DIR="/var/cache/cablecat-wiki"
 
-
 # Load configuration
 # 1. System-wide default configuration
 if [ -f "/etc/cablecat/cablecat.conf" ]; then
     # We source it to allow flexible configuration
     source "/etc/cablecat/cablecat.conf"
 fi
-
-
 
 CACHE_FILE="$CACHE_DIR/${ENCODED_TITLE}.html"
 
@@ -35,8 +32,16 @@ TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
 
 # Download and extract content
-curl -s "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&format=json&titles=$ENCODED_TITLE" | \
-jq -r '.query.pages[].revisions[0]["*"]' > "$TMP_DIR/page.wiki"
+# Download, parse, and extract content
+# fetching all props needed: wikitext for content, sections for TOC
+curl -s "https://en.wikipedia.org/w/api.php?action=parse&prop=wikitext|sections&format=json&page=$ENCODED_TITLE" > "$TMP_DIR/response.json"
+
+# Extract wikitext
+jq -r '.parse.wikitext["*"]' "$TMP_DIR/response.json" > "$TMP_DIR/page.wiki"
+
+# Extract TOC if available and format for fzf usage
+# Format: [Index] Title | Anchor
+jq -r '.parse.sections[] | "\(.index) \(.line) |\(.anchor)"' "$TMP_DIR/response.json" > "$CACHE_FILE.toc" 2>/dev/null
 
 # Check if content was found (basic check)
 if [ ! -s "$TMP_DIR/page.wiki" ] || [ "$(cat "$TMP_DIR/page.wiki")" == "null" ]; then
