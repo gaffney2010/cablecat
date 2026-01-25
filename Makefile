@@ -20,6 +20,8 @@ build:
 	@mkdir -p $(STAGE_DIR)/usr/bin
 	@mkdir -p $(STAGE_DIR)/etc/cablecat
 	@mkdir -p $(STAGE_DIR)/lib/systemd/system
+	@mkdir -p $(STAGE_DIR)/usr/lib/cablecat-wiki
+	@mkdir -p $(STAGE_DIR)/usr/lib/cgi-bin
 
 	# Copy Debian control files
 	@cp -r $(DEBIAN_SRC_DIR)/DEBIAN/* $(STAGE_DIR)/DEBIAN/
@@ -36,9 +38,15 @@ build:
 	@cp $(SRC_DIR)/cablecat-cleanup.service $(STAGE_DIR)/lib/systemd/system/
 	@cp $(SRC_DIR)/cablecat-cleanup.timer $(STAGE_DIR)/lib/systemd/system/
 	
+	# Copy Helper Scripts and CGI
+	@cp $(SRC_DIR)/rewrite_links.py $(STAGE_DIR)/usr/lib/cablecat-wiki/rewrite_links.py
+	@cp $(SRC_DIR)/cablecat_jump.cgi $(STAGE_DIR)/usr/lib/cgi-bin/cablecat_jump.cgi
+	
 	# Set executable permissions
 	@chmod 755 $(STAGE_DIR)/usr/bin/$(PACKAGE_NAME)
 	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-cleanup
+	@chmod 755 $(STAGE_DIR)/usr/lib/cablecat-wiki/rewrite_links.py
+	@chmod 755 $(STAGE_DIR)/usr/lib/cgi-bin/cablecat_jump.cgi
 	
 	# Build the .deb package
 	@dpkg-deb --build $(STAGE_DIR) $(DEB_NAME)

@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+import sys
+import argparse
+from bs4 import BeautifulSoup
+import urllib.parse
+import os
+
+def main():
+    parser = argparse.ArgumentParser(description="Rewrite wikilinks to CGI jump scripts.")
+    parser.add_argument("file", help="HTML file to process")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.file):
+        # Fail silently or verbose? User requested "Execute cablecat-wiki" 
+        # but here we are just rewriting. 
+        # If file missing, maybe just exit.
+        sys.exit(1)
+
+    # Load configuration to get port
+    port = 8080
+    config_path = "/etc/cablecat/cablecat.conf"
+    if os.path.exists(config_path):
+        with open(config_path, "r") as cf:
+            for line in cf:
+                if line.startswith("PORT="):
+                    try:
+                        port = int(line.strip().split("=")[1])
+                    except:
+                        pass
+
+    try:
+        with open(args.file, "r", encoding="utf-8") as f:
+            soup = BeautifulSoup(f, "html.parser")
+        
+        # Find all wikilinks
+        links = soup.find_all("a", attrs={"title": "wikilink"})
+        
+        for a in links:
+            href = a.get("href")
+            if href:
+                # Avoid rewriting external links
+                if not href.startswith(("http:", "https:", "ftp:", "mailto:")):
+                    quoted_href = urllib.parse.quote(href)
+                    # Use localhost URL to point to CGI
+                    a["href"] = f"http://localhost:{port}/cgi-bin/cablecat_jump.cgi?target={quoted_href}"
+        
+        with open(args.file, "w", encoding="utf-8") as f:
+            f.write(str(soup))
+
+    except Exception as e:
+        sys.stderr.write(f"Error rewriting links: {e}\n")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

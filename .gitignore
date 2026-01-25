@@ -18,3 +18,5 @@ wiki/debian/lib/
 # Maintainer scripts copied to control dir
 wiki/debian/DEBIAN/postinst
 wiki/debian/DEBIAN/prerm
+
+build

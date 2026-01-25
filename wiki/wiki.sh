@@ -47,6 +47,9 @@ fi
 # Convert to HTML
 pandoc -f mediawiki -t html "$TMP_DIR/page.wiki" -o "$TMP_DIR/page.html"
 
+# Rewrite links for valid w3m navigation
+python3 /usr/lib/cablecat-wiki/rewrite_links.py "$TMP_DIR/page.html"
+
 # Save to cache if directory exists and is writable
 if [ -d "$CACHE_DIR" ] && [ -w "$CACHE_DIR" ]; then
     cp "$TMP_DIR/page.html" "$CACHE_FILE"
