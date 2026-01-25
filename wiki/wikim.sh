@@ -100,42 +100,70 @@ if ! command -v fzf &> /dev/null; then
     exit 1
 fi
 
-# Check if we are inside tmux
-if [ -n "$TMUX" ]; then
-    CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
+# Check if we are running in our isolated environment
+if [ -z "$WIKIM_ISOLATED" ]; then
+    # We are NOT in the isolated environment.
+    # 1. Create a unique socket name based on PID to allow multiple independent instances if needed.
+    SOCKET_NAME="wikim_$$"
+    SOCKET_PATH="/tmp/$SOCKET_NAME" # Approximate path, tmux -L creates it usually in /tmp/tmux-<uid>/... or similar, 
+                                    # BUT -L actually specifies a socket name/path. 
+                                    # If we use a full path with -S it's explicit.
+                                    # However, -L is easier for "named" sockets relative to TMPDIR. 
+                                    # Let's use -S with an explicit path for absolute certainty and ease of saving.
     
-    # Resolve absolute path to self to ensure we call the correct script
+    REAL_SOCKET_PATH="/tmp/wikim-socket-$$"
+    
+    # 2. Save the socket path for the developer
+    echo "$REAL_SOCKET_PATH" > /tmp/wikim_latest_socket
+    
+    echo "Starting isolated wikim session..."
+    echo "Socket: $REAL_SOCKET_PATH" >> "$LOGfile"
+
+    # 3. Exec into tmux using this socket
+    # We pass the same arguments.
+    # We set WIKIM_ISOLATED=1 to prevent infinite recursion.
+    export WIKIM_ISOLATED=1
+    
+    # Resolve absolute path
     SELF=$(realpath "$0")
-    echo "Self: $SELF" >> "$LOGfile"
     
-    # Split the current pane
-    # We call ourselves with --selector flag
-    SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELF --selector $CURRENT_PANE \"$TITLE\" \"$TOC_FILE\"")
-    echo "Started sidebar pane: $SIDEBAR_PANE" >> "$LOGfile"
-    
-    # Set a trap to cleanup
-    trap "cleanup_and_exit $SIDEBAR_PANE" EXIT
-    
-    # Run wiki.sh
-    script_dir=$(dirname "$(realpath "$0")")
-    if command -v wiki &> /dev/null; then
-        WIKI_CMD="wiki"
-    elif command -v cablecat-wiki &> /dev/null; then
-        WIKI_CMD="cablecat-wiki"
-    elif [ -f "$script_dir/wiki.sh" ]; then
-        WIKI_CMD="$script_dir/wiki.sh"
-    else
-        echo "Error: Could not find wiki, cablecat-wiki or wiki.sh"
-        exit 1
-    fi
-    
-    echo "Running Wiki CMD: $WIKI_CMD" >> "$LOGfile"
-    "$WIKI_CMD" "$TITLE"
-    
-else
-    # Not in tmux, start a new session
-    # We use 'exec' to replace the current shell with tmux to avoid nesting issues or leftover processes
-    # We start a new session named "wikim-$$" to be unique
-    ABS_SCRIPT=$(realpath "$0")
-    exec tmux new-session "$ABS_SCRIPT \"$TITLE\""
+    # Start new session attached
+    exec tmux -S "$REAL_SOCKET_PATH" new-session "$SELF \"$TITLE\""
 fi
+
+# =========================================================================================
+# INTERNAL LOGIC (Running inside the isolated tmux)
+# =========================================================================================
+
+# At this point, we are GUARANTEED to be inside our own dedicated tmux server (socket).
+# pane_id will likely be %0 if it's the first pane.
+
+CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
+
+# Resolve absolute path to self
+SELF=$(realpath "$0")
+echo "Self: $SELF" >> "$LOGfile"
+
+# Split the current pane
+# We call ourselves with --selector flag
+SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELF --selector $CURRENT_PANE \"$TITLE\" \"$TOC_FILE\"")
+echo "Started sidebar pane: $SIDEBAR_PANE" >> "$LOGfile"
+
+# Set a trap to cleanup
+trap "cleanup_and_exit $SIDEBAR_PANE" EXIT
+
+# Run wiki.sh
+script_dir=$(dirname "$(realpath "$0")")
+if command -v wiki &> /dev/null; then
+    WIKI_CMD="wiki"
+elif command -v cablecat-wiki &> /dev/null; then
+    WIKI_CMD="cablecat-wiki"
+elif [ -f "$script_dir/wiki.sh" ]; then
+    WIKI_CMD="$script_dir/wiki.sh"
+else
+    echo "Error: Could not find wiki, cablecat-wiki or wiki.sh"
+    exit 1
+fi
+
+echo "Running Wiki CMD: $WIKI_CMD" >> "$LOGfile"
+"$WIKI_CMD" "$TITLE"
