@@ -45,15 +45,11 @@ log "Using CACHE_DIR: $CACHE_DIR"
 TOC_FILE="$CACHE_DIR/$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//').html.toc"
 SELF=$(realpath "$0")
 
-
-
 # Cleanup hook
 cleanup() { 
     log "Cleanup called for pane $1"
     tmux kill-pane -t "$1" 2>/dev/null; 
 }
-
-
 
 # MAIN LOGIC: Split window and start components
 CURRENT_PANE=$(tmux display-message -p '#{pane_id}')

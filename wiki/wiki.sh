@@ -9,15 +9,6 @@ fi
 TITLE="$1"
 ENCODED_TITLE=$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//')
 
-# Function to handle output
-view_page() {
-    local file="$1"
-    if [ -t 1 ]; then
-        w3m "$file"
-    else
-        cat "$file"
-    fi
-}
 
 # Check cache
 # Default configuration values
@@ -35,7 +26,7 @@ fi
 CACHE_FILE="$CACHE_DIR/${ENCODED_TITLE}.html"
 
 if [ -f "$CACHE_FILE" ]; then
-    view_page "$CACHE_FILE"
+    w3m "$CACHE_FILE"
     exit 0
 fi
 
@@ -72,4 +63,4 @@ if [ -d "$CACHE_DIR" ] && [ -w "$CACHE_DIR" ]; then
     cp "$TMP_DIR/page.html" "$CACHE_FILE"
 fi
 
-view_page "$TMP_DIR/page.html"
+w3m "$TMP_DIR/page.html"
