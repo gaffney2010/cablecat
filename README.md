@@ -24,6 +24,8 @@ make install
 
 This will build a Debian package and install it on your system.
 
+> **Note**: The installation process will automatically configure `apache2` to listen on port 8080 and enable the CGI module to support the Wikipedia link jumping feature. It will modify `/etc/apache2/ports.conf` and default site configuration.
+
 ### Uninstallation
 
 To remove `cablecat-wiki`, run:

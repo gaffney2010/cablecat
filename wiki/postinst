@@ -7,4 +7,25 @@ if [ "$1" = "configure" ]; then
         systemctl enable cablecat-cleanup.timer
         systemctl start cablecat-cleanup.timer
     fi
+
+    # Configure Apache for CGI on port 8080
+    if command -v a2enmod >/dev/null; then
+        echo "Enabling Apache CGI module..."
+        a2enmod cgi
+    fi
+
+    if [ -f /etc/apache2/ports.conf ]; then
+        echo "Configuring Apache to listen on port 8080..."
+        sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf
+    fi
+
+    if [ -f /etc/apache2/sites-available/000-default.conf ]; then
+        echo "Updating default Apache site to port 8080..."
+        sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
+    fi
+
+    if command -v systemctl >/dev/null; then
+        echo "Restarting Apache..."
+        systemctl restart apache2
+    fi
 fi
