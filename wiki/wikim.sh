@@ -45,57 +45,7 @@ log "Using CACHE_DIR: $CACHE_DIR"
 TOC_FILE="$CACHE_DIR/$(echo "$TITLE" | jq -sRr @uri | sed 's/%0A$//').html.toc"
 SELF=$(realpath "$0")
 
-# Selector function (runs in the sidebar pane)
-run_selector() {
-    local target_pane="$1"
-    local toc_file="$2"
-    
-    log "Selector started. Target: $target_pane, TOC: $toc_file"
-    echo "Waiting for TOC..."
-    
-    # Wait for TOC
-    local waited=0
-    while [ ! -f "$toc_file" ]; do
-        sleep 0.2
-        waited=$((waited+1))
-        # Exit if main pane dies
-        if ! tmux list-panes -t "$target_pane" &>/dev/null; then
-             log "Target pane died. Exiting selector."
-             exit 0
-        fi
-        if [ $waited -gt 50 ]; then # Log every ~10s
-             log "Still waiting for TOC..."
-             waited=0
-        fi
-    done
-    
-    log "TOC found. Launching fzf loop."
 
-    while true; do
-        # fzf selector
-        # We cat the file. If it's empty, fzf shows 0/0.
-        selection=$(cat "$toc_file" | fzf --delimiter='\|' --with-nth=1 --expect=enter) 
-        ret=$?
-        
-        if [ $ret -ne 0 ]; then
-             log "fzf exited with code $ret. Quitting."
-             break
-        fi
-        
-        # Parse selection: "Index Title |Anchor"
-        anchor=$(echo "$selection" | tail -n1 | awk -F'|' '{print $2}')
-        log "Selected anchor: $anchor"
-        
-        if [ -n "$anchor" ]; then
-            # Control the main pane (w3m)
-            # v=toggle line number (hack to clear buffer?), /search, z=center
-            tmux send-keys -t "$target_pane" "v" "/id=\"$anchor\"" "Enter" "v" "z"
-        fi
-    done
-    
-    # If selector exits, kill the main pane
-    tmux send-keys -t "$target_pane" "q" "y" 2>/dev/null
-}
 
 # Cleanup hook
 cleanup() { 
@@ -103,18 +53,21 @@ cleanup() {
     tmux kill-pane -t "$1" 2>/dev/null; 
 }
 
-# MODE CHECK: Are we the sidebar selector?
-if [ "$1" == "--selector" ]; then
-    run_selector "$2" "$4"
-    exit 0
-fi
+
 
 # MAIN LOGIC: Split window and start components
 CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
 log "Main pane ID: $CURRENT_PANE"
 
 # Create sidebar
-SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELF --selector $CURRENT_PANE \"$TITLE\" \"$TOC_FILE\"")
+SELECTOR_CMD=$(command -v cablecat-wikim-selector || command -v wikim-selector || echo "$(dirname "$SELF")/wikim_selector.sh")
+if [ ! -x "$SELECTOR_CMD" ]; then
+    echo "Error: wikim could not find 'cablecat-wikim-selector', 'wikim-selector' or 'wikim_selector.sh'"
+    log "Error: Selector command not found"
+    exit 1
+fi
+
+SIDEBAR_PANE=$(tmux split-window -h -l 25% -d -P -F "#{pane_id}" "$SELECTOR_CMD $CURRENT_PANE \"$TITLE\" \"$TOC_FILE\"")
 log "Sidebar launched: $SIDEBAR_PANE"
 trap "cleanup $SIDEBAR_PANE" EXIT
 
