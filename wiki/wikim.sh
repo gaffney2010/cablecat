@@ -5,11 +5,18 @@
 # 1. ISOLATION: Ensure we run in a dedicated tmux session
 #    This allows external scripts to control this instance (e.g., resizing) via the socket.
 if [ -z "$WIKIM_ISOLATED" ]; then
-    # Create an explicit socket path so we can find it easily later
-    SOCKET="/tmp/wikim-socket-$$"
-    echo "$SOCKET" > /tmp/wikim_latest_socket    # Re-exec ourselves inside the isolated session
-    export WIKIM_ISOLATED=1
-    exec tmux -S "$SOCKET" new-session "$(realpath "$0") \"$1\""
+    if [ -n "$TMUX" ]; then
+        # We are already inside tmux. Don't nest a new session, just use the current one.
+        # But still export the socket location for external tools.
+        tmux display-message -p "#{socket_path}" > /tmp/wikim_latest_socket
+    else
+        # Not in tmux: Start a new isolated session
+        # Create an explicit socket path so we can find it easily later
+        SOCKET="/tmp/wikim-socket-$$"
+        echo "$SOCKET" > /tmp/wikim_latest_socket
+        export WIKIM_ISOLATED=1
+        exec tmux -S "$SOCKET" new-session "$(realpath "$0") \"$1\""
+    fi
 fi
 
 # =========================================================================================
