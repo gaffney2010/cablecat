@@ -43,18 +43,18 @@ cleanup() {
 CURRENT_PANE=$(tmux display-message -p '#{pane_id}')
 
 # Create sidebar
-SELECTOR_CMD=$([ -x "/usr/lib/cablecat-wiki/wiki-selector.sh" ] && echo "/usr/lib/cablecat-wiki/wiki-selector.sh" || echo "$(dirname "$SELF")/wiki-selector.sh")
+SELECTOR_CMD="/usr/lib/cablecat-wiki/wiki-selector.sh"
 if [ ! -x "$SELECTOR_CMD" ]; then
-    echo "Error: wikim could not find 'wiki-selector.sh' in /usr/lib/cablecat-wiki or local directory"
+    echo "Error: wikim could not find 'wiki-selector.sh' in /usr/lib/cablecat-wiki"
     exit 1
 fi
 
 trap "cleanup $SIDEBAR_PANE" EXIT
 
 # Find and run wiki reader
-WIKI_CMD=$(command -v wiki || command -v cablecat-wiki || echo "$(dirname "$SELF")/wiki.sh")
+WIKI_CMD=$(command -v cablecat-wiki)
 if [ ! -x "$WIKI_CMD" ]; then
-    echo "Error: wikim could not find 'wiki', 'cablecat-wiki', or 'wiki.sh'"
+    echo "Error: wikim could not find 'cablecat-wiki'"
     exit 1
 fi
 
