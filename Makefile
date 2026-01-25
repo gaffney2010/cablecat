@@ -42,6 +42,7 @@ build:
 	
 	# Copy Helper Scripts and CGI
 	@cp $(SRC_DIR)/rewrite_links.py $(STAGE_DIR)/usr/lib/cablecat-wiki/rewrite_links.py
+	@cp $(SRC_DIR)/wiki-download.sh $(STAGE_DIR)/usr/lib/cablecat-wiki/wiki-download.sh
 	@cp $(SRC_DIR)/cablecat_jump.cgi $(STAGE_DIR)/usr/lib/cgi-bin/cablecat_jump.cgi
 	
 	# Set executable permissions
@@ -50,6 +51,7 @@ build:
 	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-wikim-selector
 	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-cleanup
 	@chmod 755 $(STAGE_DIR)/usr/lib/cablecat-wiki/rewrite_links.py
+	@chmod 755 $(STAGE_DIR)/usr/lib/cablecat-wiki/wiki-download.sh
 	@chmod 755 $(STAGE_DIR)/usr/lib/cgi-bin/cablecat_jump.cgi
 	
 	# Build the .deb package

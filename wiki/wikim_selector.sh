@@ -5,42 +5,34 @@
 LOG="/tmp/wikim.debug"
 log() { echo "[$(date '+%H:%M:%S')] [SELECTOR] $@" >> "$LOG"; }
 
-# Arguments: <Target_Pane_ID> <Wiki_Title (unused but passed)> <TOC_File>
+# Arguments: <Target_Pane_ID> <Wiki_Title> <TOC_File (ignored)>
 TARGET_PANE="$1"
 TITLE="$2"
-TOC_FILE="$3"
+# TOC_FILE is no longer used, as the downloader handles it
+# TOC_FILE="$3"
 
-if [ -z "$TARGET_PANE" ] || [ -z "$TOC_FILE" ]; then
-    echo "Usage: $0 <Target_Pane_ID> <Wiki_Title> <TOC_File>"
+if [ -z "$TARGET_PANE" ] || [ -z "$TITLE" ]; then
+    echo "Usage: $0 <Target_Pane_ID> <Wiki_Title> [TOC_File]"
     log "Error: Missing arguments. Got: $@"
     exit 1
 fi
 
-log "Selector started. Target: $TARGET_PANE, TOC: $TOC_FILE"
-echo "Waiting for TOC..."
+DOWNLOADER="/usr/lib/cablecat-wiki/wiki-download.sh"
+# Fallback for dev
+if [ ! -x "$DOWNLOADER" ]; then
+    DOWNLOADER="$(dirname "$0")/wiki-download.sh"
+fi
 
-# Wait for TOC
-waited=0
-while [ ! -f "$TOC_FILE" ]; do
-    sleep 0.2
-    waited=$((waited+1))
-    # Exit if main pane dies
-    if ! tmux list-panes -t "$TARGET_PANE" &>/dev/null; then
-         log "Target pane died. Exiting selector."
-         exit 0
-    fi
-    if [ $waited -gt 50 ]; then # Log every ~10s
-         log "Still waiting for TOC..."
-         waited=0
-    fi
-done
+log "Selector started. Target: $TARGET_PANE, Title: $TITLE"
 
-log "TOC found. Launching fzf loop."
+# Loop for fzf
+# We don't need to manually wait for a file anymore because the downloader script
+# handles locking and waiting for the download if necessary.
 
 while true; do
     # fzf selector
-    # We cat the file. If it's empty, fzf shows 0/0.
-    selection=$(cat "$TOC_FILE" | fzf --delimiter='\|' --with-nth=1 --expect=enter) 
+    # Call the downloader to stream the TOC content
+    selection=$("$DOWNLOADER" "$TITLE" "toc" | fzf --delimiter='\|' --with-nth=1 --expect=enter) 
     ret=$?
     
     if [ $ret -ne 0 ]; then
