@@ -1,5 +1,5 @@
 #!/bin/bash
-# wikim_selector.sh - Selector pane for wikim
+# wiki-selector.sh - Selector pane for wikim
 
 # Arguments: <Target_Pane_ID> <Wiki_Title> <TOC_File (ignored)>
 TARGET_PANE="$1"
