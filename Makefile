@@ -6,7 +6,7 @@ STAGE_DIR := $(BUILD_DIR)/stage
 # The source directory for debian control files
 DEBIAN_SRC_DIR := $(SRC_DIR)/debian
 
-.PHONY: all build install uninstall clean
+.PHONY: all build install uninstall reinstall clean
 
 all: build
 
@@ -74,6 +74,8 @@ uninstall:
 	@sudo rm -rf /var/cache/cablecat-wiki
 	
 	@echo "Uninstallation complete. (Run 'sudo apt-get autoremove' to clean up unused dependencies)"
+
+reinstall: uninstall install
 
 clean:
 	@echo "Cleaning up..."
