@@ -1,0 +1,6 @@
+[Unit]
+Description=Clean up old CableCat Wiki cache files
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/cablecat-cleanup

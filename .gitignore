@@ -8,3 +8,13 @@ wiki/debian/etc/cablecat/cablecat.conf
 # Temporary files from script (though script handles them)
 page.wiki
 page.html
+
+# Cleanup script artifact
+wiki/debian/usr/bin/cablecat-cleanup
+
+# Systemd units
+wiki/debian/lib/
+
+# Maintainer scripts copied to control dir
+wiki/debian/DEBIAN/postinst
+wiki/debian/DEBIAN/prerm

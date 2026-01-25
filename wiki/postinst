@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "configure" ]; then
+    if command -v systemctl >/dev/null; then
+        systemctl daemon-reload
+        systemctl enable cablecat-cleanup.timer
+        systemctl start cablecat-cleanup.timer
+    fi
+fi
