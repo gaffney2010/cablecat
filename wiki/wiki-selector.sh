@@ -31,11 +31,24 @@ while true; do
     fi
     
     # Parse selection: "Index Title |Anchor"
-    anchor=$(echo "$selection" | tail -n1 | awk -F'|' '{print $2}')
+    # We want to display the Title but use the Anchor (ID) for navigation.
+    # Note: MediaWiki anchors are like "Political_issues", but Pandoc generates "political_issues" (lowercase).
+    # We use bash substitution to reliably get everything after the last pipe, handling titles with pipes.
+    last_line=$(echo "$selection" | tail -n1)
+    anchor="${last_line##*|}"
+    
     if [ -n "$anchor" ]; then
-        # Control the main pane (w3m)
-        # v=toggle line number (hack to clear buffer?), /search, z=center
-        tmux send-keys -t "$TARGET_PANE" "v" "/id=\"$anchor\"" "Enter" "v" "z"
+        # Convert to lowercase to match Pandoc's ID generation
+        anchor=$(echo "$anchor" | tr '[:upper:]' '[:lower:]')
+
+        # Close existing instance and reopen with specific ID
+        WIKI_CMD="cablecat-wiki"
+
+        # Escape arguments for the shell command string
+        TITLE_ESC=$(printf %q "$TITLE")
+        ANCHOR_ESC=$(printf %q "$anchor")
+
+        tmux respawn-pane -k -t "$TARGET_PANE" "$WIKI_CMD --id $ANCHOR_ESC $TITLE_ESC"
     fi
 done
 
