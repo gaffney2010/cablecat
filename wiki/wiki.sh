@@ -1,16 +1,18 @@
 #!/bin/bash
 
 # Parse arguments using getopt
-PARSED=$(getopt -o '' --long id: -n "$0" -- "$@")
+PARSED=$(getopt -o '' --long id:,stdout -n "$0" -- "$@")
 if [ $? -ne 0 ]; then exit 1; fi
 eval set -- "$PARSED"
 
 ID=""
 TITLE=""
+STDOUT_MODE="false"
 
 while true; do
     case "$1" in
         --id) ID="$2"; shift 2 ;;
+        --stdout) STDOUT_MODE="true"; shift ;;
         --) shift; break ;;
         *) echo "Internal error"; exit 1 ;;
     esac
@@ -59,7 +61,9 @@ pandoc -f mediawiki -t html "$TMP_DIR/page.wiki" -o "$TMP_DIR/page.html"
 # Rewrite links for valid w3m navigation
 python3 /usr/lib/cablecat-wiki/rewrite_links.py "$TMP_DIR/page.html"
 
-if [ -n "$ID" ]; then
+if [ "${STDOUT_MODE:-false}" = "true" ]; then
+    cat "$TMP_DIR/page.html"
+elif [ -n "$ID" ]; then
     w3m "$TMP_DIR/page.html#$ID"
 else
     w3m "$TMP_DIR/page.html"

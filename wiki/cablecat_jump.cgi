@@ -24,7 +24,7 @@ DECODED_TITLE=$(echo "$TARGET" | python3 -c "import sys, urllib.parse; print(url
 # Call the external wiki script
 # The wiki script is expected to output the HTML content to stdout when not in a TTY.
 if [ -x "/usr/bin/cablecat-wiki" ]; then
-    /usr/bin/cablecat-wiki "$DECODED_TITLE"
+    /usr/bin/cablecat-wiki --stdout "$DECODED_TITLE"
 else
     echo "<h1>Error: cablecat-wiki executable not found.</h1>"
 fi
