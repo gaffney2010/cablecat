@@ -48,6 +48,11 @@ if [ -z "$WIKIM_ISOLATED" ]; then
     
     tmux -S "$SOCKET" new-session -d -s wikim "$WIKI_CMD \"$TITLE\""
     
+    # Configure Prefix (C-k instead of C-b) to avoid conflict with outer tmux
+    tmux -S "$SOCKET" set-option -g prefix C-k
+    tmux -S "$SOCKET" unbind-key C-b
+    tmux -S "$SOCKET" bind-key C-k send-prefix
+
     # Configure Bindings (Global for this isolated server)
     # -n means root table (no prefix needed)
     tmux -S "$SOCKET" bind-key -n Q run-shell "echo QUIT > $WIKIM_FIFO"
