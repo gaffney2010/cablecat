@@ -4,7 +4,8 @@
 import httpx
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container, Horizontal, VerticalScroll
+from textual.message import Message
 from textual.widgets import (
     Footer,
     Header,
@@ -26,11 +27,11 @@ class LemmyAPI:
         self.base_url = base_url
         self.client = httpx.Client(timeout=30.0)
 
-    def get_posts(self, community_name: str | None = None, sort: str = "Hot", limit: int = 25) -> list[dict]:
+    def get_posts(self, community_id: int | None = None, sort: str = "Hot", limit: int = 25) -> list[dict]:
         """Get posts from the front page or a specific community."""
         params = {"sort": sort, "limit": limit, "type_": "All"}
-        if community_name:
-            params["community_name"] = community_name
+        if community_id:
+            params["community_id"] = community_id
         resp = self.client.get(f"{self.base_url}/post/list", params=params)
         resp.raise_for_status()
         return resp.json().get("posts", [])
@@ -81,6 +82,13 @@ class PostsList(ListView):
 class CommentsTree(Tree):
     """Widget showing comments as a collapsible tree."""
 
+    class CommentSelected(Message):
+        """Message sent when a comment is selected."""
+
+        def __init__(self, comment_data: dict) -> None:
+            self.comment_data = comment_data
+            super().__init__()
+
     def __init__(self, comments: list[dict], **kwargs):
         super().__init__("Comments", **kwargs)
         self.comments_data = comments
@@ -123,15 +131,20 @@ class CommentsTree(Tree):
                 score = counts.get("score", 0)
                 content = comment.get("content", "")
                 # Truncate long comments for the tree label
-                preview = content[:200] + "..." if len(content) > 200 else content
+                preview = content[:100] + "..." if len(content) > 100 else content
                 preview = preview.replace("\n", " ")
 
-                label = f"[bold cyan]u/{author}[/bold cyan] [dim]({score} pts)[/dim]\n{preview}"
-                child_node = node.add(label, expand=True)
+                label = f"[bold cyan]u/{author}[/bold cyan] [dim]({score} pts)[/dim] {preview}"
+                child_node = node.add(label, data=c, expand=True)
                 child_node.allow_expand = True
                 add_children(child_node, comment["id"])
 
         add_children(self.root, None)
+
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle node highlight (cursor movement) - post message with comment data."""
+        if event.node.data:
+            self.post_message(self.CommentSelected(event.node.data))
 
 
 class PostView(Container):
@@ -167,10 +180,27 @@ class PostView(Container):
         if body:
             yield Static(f"\n{body}\n", id="post-body")
 
-        yield Static("[bold]─── Comments ───[/bold]", markup=True)
+        with Horizontal(id="comments-container"):
+            with VerticalScroll(id="tree-panel"):
+                yield CommentsTree(self.comments, id="comments-tree")
+            with VerticalScroll(id="detail-panel"):
+                yield Static("[dim]Select a comment to view full text[/dim]", id="comment-detail", markup=True)
 
-        with VerticalScroll():
-            yield CommentsTree(self.comments, id="comments-tree")
+    def on_comments_tree_comment_selected(self, event: CommentsTree.CommentSelected) -> None:
+        """Update detail panel when a comment is selected."""
+        c = event.comment_data
+        comment = c["comment"]
+        counts = c["counts"]
+        creator = c["creator"]
+
+        author = creator.get("name", "unknown")
+        score = counts.get("score", 0)
+        content = comment.get("content", "")
+
+        detail_text = f"[bold cyan]u/{author}[/bold cyan] [dim]({score} pts)[/dim]\n\n{content}"
+
+        detail = self.query_one("#comment-detail", Static)
+        detail.update(detail_text)
 
 
 class CommunityList(ListView):
@@ -183,20 +213,23 @@ class CommunityList(ListView):
     def compose(self) -> ComposeResult:
         # Add "Front Page" option
         item = ListItem(Label("[bold]Front Page[/bold] (All)", markup=True), id="community-front")
-        item.community_name = None
+        item.community_id = None
+        item.community_display = "Front Page"
         yield item
 
         for comm in self.communities:
             community = comm["community"]
             counts = comm["counts"]
 
+            cid = community.get("id")
             name = community.get("name", "unknown")
             title = community.get("title", name)
             subscribers = counts.get("subscribers", 0)
 
             label = f"[bold]c/{name}[/bold] - {title}\n[dim]{subscribers} subscribers[/dim]"
-            item = ListItem(Label(label, markup=True), id=f"community-{community['id']}")
-            item.community_name = name
+            item = ListItem(Label(label, markup=True), id=f"community-{cid}")
+            item.community_id = cid
+            item.community_display = f"c/{name}"
             yield item
 
 
@@ -220,6 +253,24 @@ class LemmyBrowser(App):
     }
 
     PostsList ListItem, CommunityList ListItem {
+        padding: 1;
+    }
+
+    #comments-container {
+        height: 1fr;
+    }
+
+    #tree-panel {
+        width: 1fr;
+        border-right: solid $primary;
+    }
+
+    #detail-panel {
+        width: 1fr;
+        padding: 1;
+    }
+
+    #comment-detail {
         padding: 1;
     }
 
@@ -248,7 +299,8 @@ class LemmyBrowser(App):
         super().__init__()
         self.api = LemmyAPI()
         self.current_view = "posts"
-        self.current_community: str | None = None
+        self.current_community_id: int | None = None
+        self.current_community_display: str = "Front Page"
         self.current_post: dict | None = None
 
     def compose(self) -> ComposeResult:
@@ -268,13 +320,14 @@ class LemmyBrowser(App):
         container.remove_children()
 
         status = self.query_one("#status-bar", Static)
-        community_label = f"c/{self.current_community}" if self.current_community else "Front Page"
-        status.update(f"Loading posts from {community_label}...")
+        status.update(f"Loading posts from {self.current_community_display}...")
 
         try:
-            posts = self.api.get_posts(community_name=self.current_community)
+            posts = self.api.get_posts(community_id=self.current_community_id)
             container.mount(PostsList(posts, id="posts-list"))
-            status.update(f"{community_label} | {len(posts)} posts | Press 'c' for communities")
+            status.update(
+                f"{self.current_community_display} | {len(posts)} posts | Enter: open | c: communities | h: home | q: quit"
+            )
         except Exception as e:
             container.mount(Static(f"Error loading posts: {e}"))
             status.update("Error")
@@ -293,7 +346,9 @@ class LemmyBrowser(App):
             post_id = post["post"]["id"]
             comments = self.api.get_comments(post_id)
             container.mount(PostView(post, comments))
-            status.update(f"{len(comments)} comments | Press Escape to go back")
+            status.update(
+                f"{len(comments)} comments | Arrows: navigate/view | Enter/Space: collapse/expand | Esc: back"
+            )
         except Exception as e:
             container.mount(Static(f"Error loading comments: {e}"))
             status.update("Error")
@@ -310,7 +365,7 @@ class LemmyBrowser(App):
         try:
             communities = self.api.get_communities()
             container.mount(CommunityList(communities, id="community-list"))
-            status.update(f"{len(communities)} communities | Select one to browse")
+            status.update(f"{len(communities)} communities | Enter: select | Esc: back | h: home")
         except Exception as e:
             container.mount(Static(f"Error loading communities: {e}"))
             status.update("Error")
@@ -322,9 +377,10 @@ class LemmyBrowser(App):
         if hasattr(item, "post_data"):
             # Selected a post
             self.load_post_detail(item.post_data)
-        elif hasattr(item, "community_name"):
+        elif hasattr(item, "community_id"):
             # Selected a community
-            self.current_community = item.community_name
+            self.current_community_id = item.community_id
+            self.current_community_display = item.community_display
             self.load_posts()
 
     def action_go_back(self) -> None:
@@ -338,7 +394,8 @@ class LemmyBrowser(App):
 
     def action_go_home(self) -> None:
         """Go to front page."""
-        self.current_community = None
+        self.current_community_id = None
+        self.current_community_display = "Front Page"
         self.load_posts()
 
     def action_refresh(self) -> None:
