@@ -1,0 +1,7 @@
+{
+  "apps": [
+    {"name": "News Reader", "command": "newsboat"},
+    {"name": "Wikipedia", "command": "cablecat-wikim", "arg_prompt": "Article title"},
+    {"name": "Email", "command": "mutt"}
+  ]
+}

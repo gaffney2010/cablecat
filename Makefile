@@ -14,6 +14,8 @@ install:
 	@for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install; \
 	done
+	@sudo cp apps.json /usr/lib/cablecat/
+	@sudo cp cablecat /usr/bin
 
 uninstall:
 	@for dir in $(SUBDIRS); do \
