@@ -30,7 +30,7 @@ class LemmyAPI:
         self.base_url = base_url
         self.client = httpx.Client(timeout=30.0)
 
-    def get_posts(self, community_id: int | None = None, sort: str = "Hot", limit: int = 25) -> list[dict]:
+    def get_posts(self, community_id: int | None = None, sort: str = "TopDay", limit: int = 25) -> list[dict]:
         """Get posts from the front page or a specific community."""
         params = {"sort": sort, "limit": limit, "type_": "All"}
         if community_id:
@@ -39,7 +39,7 @@ class LemmyAPI:
         resp.raise_for_status()
         return resp.json().get("posts", [])
 
-    def get_comments(self, post_id: int, sort: str = "Hot", max_depth: int = 8) -> list[dict]:
+    def get_comments(self, post_id: int, sort: str = "Top", max_depth: int = 8) -> list[dict]:
         """Get comments for a post."""
         params = {"post_id": post_id, "sort": sort, "max_depth": max_depth, "type_": "All"}
         resp = self.client.get(f"{self.base_url}/comment/list", params=params)
