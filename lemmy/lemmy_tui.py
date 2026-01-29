@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """A simple TUI for browsing lemmy.ml using Textual."""
 
+import argparse
+
 import httpx
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -9,6 +11,7 @@ from textual.message import Message
 from textual.widgets import (
     Footer,
     Header,
+    Input,
     Label,
     ListItem,
     ListView,
@@ -49,6 +52,15 @@ class LemmyAPI:
         resp = self.client.get(f"{self.base_url}/community/list", params=params)
         resp.raise_for_status()
         return resp.json().get("communities", [])
+
+    def get_community(self, name: str) -> dict | None:
+        """Get a specific community by name."""
+        params = {"name": name}
+        resp = self.client.get(f"{self.base_url}/community", params=params)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("community_view")
 
 
 class PostsList(ListView):
@@ -203,34 +215,24 @@ class PostView(Container):
         detail.update(detail_text)
 
 
-class CommunityList(ListView):
-    """Widget showing a list of communities."""
+class CommunityInput(Container):
+    """Widget for entering a community name."""
 
-    def __init__(self, communities: list[dict], **kwargs):
-        super().__init__(**kwargs)
-        self.communities = communities
+    class CommunitySubmitted(Message):
+        """Message sent when a community name is submitted."""
+
+        def __init__(self, community_name: str) -> None:
+            self.community_name = community_name
+            super().__init__()
 
     def compose(self) -> ComposeResult:
-        # Add "Front Page" option
-        item = ListItem(Label("[bold]Front Page[/bold] (All)", markup=True), id="community-front")
-        item.community_id = None
-        item.community_display = "Front Page"
-        yield item
+        yield Static("[bold]Enter community name[/bold]", markup=True)
+        yield Static("[dim]Examples: linux, python, technology (or leave empty for Front Page)[/dim]", markup=True)
+        yield Input(placeholder="community name", id="community-input")
 
-        for comm in self.communities:
-            community = comm["community"]
-            counts = comm["counts"]
-
-            cid = community.get("id")
-            name = community.get("name", "unknown")
-            title = community.get("title", name)
-            subscribers = counts.get("subscribers", 0)
-
-            label = f"[bold]c/{name}[/bold] - {title}\n[dim]{subscribers} subscribers[/dim]"
-            item = ListItem(Label(label, markup=True), id=f"community-{cid}")
-            item.community_id = cid
-            item.community_display = f"c/{name}"
-            yield item
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle community name submission."""
+        self.post_message(self.CommunitySubmitted(event.value.strip()))
 
 
 class LemmyBrowser(App):
@@ -248,12 +250,20 @@ class LemmyBrowser(App):
         margin-bottom: 1;
     }
 
-    PostsList, CommunityList {
+    PostsList {
         height: 100%;
     }
 
-    PostsList ListItem, CommunityList ListItem {
+    PostsList ListItem {
         padding: 1;
+    }
+
+    CommunityInput {
+        padding: 2;
+    }
+
+    CommunityInput Input {
+        margin-top: 1;
     }
 
     #comments-container {
@@ -295,13 +305,14 @@ class LemmyBrowser(App):
         Binding("r", "refresh", "Refresh"),
     ]
 
-    def __init__(self):
+    def __init__(self, initial_community: str | None = None):
         super().__init__()
         self.api = LemmyAPI()
         self.current_view = "posts"
         self.current_community_id: int | None = None
         self.current_community_display: str = "Front Page"
         self.current_post: dict | None = None
+        self.initial_community = initial_community
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -311,7 +322,33 @@ class LemmyBrowser(App):
 
     def on_mount(self) -> None:
         self.title = "Lemmy Browser"
-        self.load_posts()
+        if self.initial_community:
+            self._load_community_by_name(self.initial_community)
+        else:
+            self.load_posts()
+
+    def _load_community_by_name(self, name: str) -> None:
+        """Load a community by name and then load its posts."""
+        status = self.query_one("#status-bar", Static)
+        status.update(f"Looking up community '{name}'...")
+
+        try:
+            community_view = self.api.get_community(name)
+            if community_view:
+                community = community_view["community"]
+                self.current_community_id = community["id"]
+                self.current_community_display = f"c/{community['name']}"
+                self.load_posts()
+            else:
+                status.update(f"Community '{name}' not found")
+                container = self.query_one("#main-content")
+                container.remove_children()
+                container.mount(Static(f"[bold red]Community '{name}' not found.[/bold red]\n\nPress 'c' to enter a different community name, or 'h' for the front page.", markup=True))
+        except Exception as e:
+            status.update(f"Error: {e}")
+            container = self.query_one("#main-content")
+            container.remove_children()
+            container.mount(Static(f"Error looking up community: {e}"))
 
     def load_posts(self) -> None:
         """Load and display posts."""
@@ -354,21 +391,17 @@ class LemmyBrowser(App):
             status.update("Error")
 
     def load_communities(self) -> None:
-        """Load and display communities list."""
+        """Show community input."""
         self.current_view = "communities"
         container = self.query_one("#main-content")
         container.remove_children()
 
         status = self.query_one("#status-bar", Static)
-        status.update("Loading communities...")
+        status.update("Enter community name | Enter: go | Esc: back | h: home")
 
-        try:
-            communities = self.api.get_communities()
-            container.mount(CommunityList(communities, id="community-list"))
-            status.update(f"{len(communities)} communities | Enter: select | Esc: back | h: home")
-        except Exception as e:
-            container.mount(Static(f"Error loading communities: {e}"))
-            status.update("Error")
+        container.mount(CommunityInput(id="community-input-container"))
+        # Focus the input
+        self.query_one("#community-input", Input).focus()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle selection in list views."""
@@ -377,11 +410,17 @@ class LemmyBrowser(App):
         if hasattr(item, "post_data"):
             # Selected a post
             self.load_post_detail(item.post_data)
-        elif hasattr(item, "community_id"):
-            # Selected a community
-            self.current_community_id = item.community_id
-            self.current_community_display = item.community_display
+
+    def on_community_input_community_submitted(self, event: CommunityInput.CommunitySubmitted) -> None:
+        """Handle community name submission."""
+        name = event.community_name
+        if not name:
+            # Empty input = front page
+            self.current_community_id = None
+            self.current_community_display = "Front Page"
             self.load_posts()
+        else:
+            self._load_community_by_name(name)
 
     def action_go_back(self) -> None:
         """Go back to previous view."""
@@ -409,5 +448,14 @@ class LemmyBrowser(App):
 
 
 if __name__ == "__main__":
-    app = LemmyBrowser()
+    parser = argparse.ArgumentParser(description="A TUI for browsing Lemmy")
+    parser.add_argument(
+        "community",
+        nargs="?",
+        default=None,
+        help="Community name to load on startup (e.g., 'linux', 'python')",
+    )
+    args = parser.parse_args()
+
+    app = LemmyBrowser(initial_community=args.community)
     app.run()
