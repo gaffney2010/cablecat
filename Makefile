@@ -1,5 +1,5 @@
 # Subdirectories with their own Makefiles
-SUBDIRS := wiki
+SUBDIRS := wiki lemmy
 
 .PHONY: all build install uninstall reinstall clean $(SUBDIRS)
 
