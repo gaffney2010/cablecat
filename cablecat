@@ -9,7 +9,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # Extract ASCII art from README (lines 2-6, between the code fences)
-ASCII_ART=$(sed -n '2,6p' "$SCRIPT_DIR/README.md")
+ASCII_ART=$(sed -n '2,6p' "/usr/lib/cablecat/README.md")
 
 # Get app names for fzf
 APP_NAMES=$(jq -r '.apps[].name' "$CONFIG_FILE")

@@ -15,6 +15,7 @@ install:
 		$(MAKE) -C $$dir install; \
 	done
 	@sudo cp apps.json /usr/lib/cablecat/
+	@sudo cp README.md /usr/lib/cablecat/
 	@sudo cp cablecat /usr/bin
 
 uninstall:
@@ -22,10 +23,7 @@ uninstall:
 		$(MAKE) -C $$dir uninstall; \
 	done
 
-reinstall:
-	@for dir in $(SUBDIRS); do \
-		$(MAKE) -C $$dir reinstall; \
-	done
+reinstall: uninstall install
 
 clean:
 	@for dir in $(SUBDIRS); do \
