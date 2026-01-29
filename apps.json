@@ -1,5 +1,6 @@
 {
   "apps": [
+    {"name": "LLM", "command": "llm chat"},
     {"name": "News Reader", "command": "newsboat"},
     {"name": "Wikipedia", "command": "cablecat-wiki-search", "arg_prompt": "Search term"},
     {"name": "Email", "command": "mutt"},
