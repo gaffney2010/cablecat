@@ -1,14 +1,5 @@
 #!/bin/bash
 
-# Debug function - writes to stderr (Apache error log) and collects for HTML output
-DEBUG_LOG=""
-debug() {
-    echo "[CGI DEBUG $(date '+%H:%M:%S')] $*" >&2
-    DEBUG_LOG="${DEBUG_LOG}<!-- DEBUG: $* -->\n"
-}
-
-debug "CGI script started, QUERY_STRING=$QUERY_STRING"
-
 # cablecat_jump.cgi - Handle wiki jumps via CGI
 # This script is executed by the web server (Apache).
 # It delegates the logic to /usr/bin/wiki (which supports non-interactive output).
@@ -46,7 +37,6 @@ fi
 # The wiki script is expected to output the HTML content to stdout when not in a TTY.
 if [ -x "/usr/bin/cablecat-wiki" ]; then
     if [ -n "$DECODED_SOCKET" ]; then
-        debug "Wikim mode: socket=$DECODED_SOCKET selector=$DECODED_SELECTOR_PANE main=$DECODED_MAIN_PANE title=$DECODED_TITLE"
         # Wikim mode: pass context so subsequent links also have it
         /usr/bin/cablecat-wiki --stdout \
             --wikim-socket "$DECODED_SOCKET" \
@@ -56,16 +46,11 @@ if [ -x "/usr/bin/cablecat-wiki" ]; then
 
         # Respawn the selector pane with the new title
         SELECTOR_CMD="/usr/lib/cablecat-wiki/wiki-selector.sh"
-        debug "Respawning selector: tmux -S $DECODED_SOCKET respawn-pane -k -t $DECODED_SELECTOR_PANE"
         tmux -S "$DECODED_SOCKET" respawn-pane -k -t "$DECODED_SELECTOR_PANE" \
-            "$SELECTOR_CMD $DECODED_MAIN_PANE \"$DECODED_TITLE\"" 2>&1 | while read line; do debug "tmux output: $line"; done
+            "$SELECTOR_CMD $DECODED_MAIN_PANE \"$DECODED_TITLE\""
     else
-        debug "Non-wikim mode: title=$DECODED_TITLE"
         /usr/bin/cablecat-wiki --stdout "$DECODED_TITLE"
     fi
 else
     echo "<h1>Error: cablecat-wiki executable not found.</h1>"
 fi
-
-# Output debug log as HTML comments (visible in page source)
-echo -e "$DEBUG_LOG"
