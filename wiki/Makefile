@@ -36,6 +36,7 @@ build:
 	@cp cablecat-cleanup.service $(STAGE_DIR)/lib/systemd/system/
 	@cp cablecat-cleanup.timer $(STAGE_DIR)/lib/systemd/system/
 	@cp wikim.sh $(STAGE_DIR)/usr/bin/cablecat-wikim
+	@cp wiki-search.sh $(STAGE_DIR)/usr/bin/cablecat-wiki-search
 
 	# Copy Helper Scripts and CGI
 	@cp wiki-selector.sh $(STAGE_DIR)/usr/lib/cablecat-wiki/wiki-selector.sh
@@ -46,6 +47,7 @@ build:
 	# Set executable permissions
 	@chmod 755 $(STAGE_DIR)/usr/bin/$(PACKAGE_NAME)
 	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-wikim
+	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-wiki-search
 	@chmod 755 $(STAGE_DIR)/usr/lib/cablecat-wiki/wiki-selector.sh
 	@chmod 755 $(STAGE_DIR)/usr/bin/cablecat-cleanup
 	@chmod 755 $(STAGE_DIR)/usr/lib/cablecat-wiki/rewrite_links.py
