@@ -1,18 +1,24 @@
 #!/bin/bash
 
 # Parse arguments using getopt
-PARSED=$(getopt -o '' --long id:,stdout -n "$0" -- "$@")
+PARSED=$(getopt -o '' --long id:,stdout,wikim-socket:,wikim-selector-pane:,wikim-main-pane: -n "$0" -- "$@")
 if [ $? -ne 0 ]; then exit 1; fi
 eval set -- "$PARSED"
 
 ID=""
 TITLE=""
 STDOUT_MODE="false"
+WIKIM_SOCKET=""
+WIKIM_SELECTOR_PANE=""
+WIKIM_MAIN_PANE=""
 
 while true; do
     case "$1" in
         --id) ID="$2"; shift 2 ;;
         --stdout) STDOUT_MODE="true"; shift ;;
+        --wikim-socket) WIKIM_SOCKET="$2"; shift 2 ;;
+        --wikim-selector-pane) WIKIM_SELECTOR_PANE="$2"; shift 2 ;;
+        --wikim-main-pane) WIKIM_MAIN_PANE="$2"; shift 2 ;;
         --) shift; break ;;
         *) echo "Internal error"; exit 1 ;;
     esac
@@ -59,7 +65,14 @@ fi
 pandoc -f mediawiki -t html "$TMP_DIR/page.wiki" -o "$TMP_DIR/page.html"
 
 # Rewrite links for valid w3m navigation
-python3 /usr/lib/cablecat-wiki/rewrite_links.py "$TMP_DIR/page.html"
+if [ -n "$WIKIM_SOCKET" ]; then
+    python3 /usr/lib/cablecat-wiki/rewrite_links.py "$TMP_DIR/page.html" \
+        --wikim-socket "$WIKIM_SOCKET" \
+        --wikim-selector-pane "$WIKIM_SELECTOR_PANE" \
+        --wikim-main-pane "$WIKIM_MAIN_PANE"
+else
+    python3 /usr/lib/cablecat-wiki/rewrite_links.py "$TMP_DIR/page.html"
+fi
 
 if [ "${STDOUT_MODE:-false}" = "true" ]; then
     cat "$TMP_DIR/page.html"

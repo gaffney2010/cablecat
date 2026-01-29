@@ -29,7 +29,8 @@ trap cleanup EXIT
 if [ -z "$WIKIM_ISOLATED" ]; then
     # Start a new isolated session
     # Create an explicit socket path so we can find it easily later
-    SOCKET="/tmp/wikim-socket-$$"
+    # Use /dev/shm instead of /tmp because Apache has PrivateTmp=yes
+    SOCKET="/dev/shm/wikim-socket-$$"
     export WIKIM_ISOLATED=1
     
     # Monitor: Watches FIFO, kills session on QUIT
@@ -47,6 +48,11 @@ if [ -z "$WIKIM_ISOLATED" ]; then
     [ -x "$WIKI_CMD" ] || WIKI_CMD="$(dirname "$(realpath "$0")")/wiki.sh"
     
     tmux -S "$SOCKET" new-session -d -s wikim "$WIKI_CMD \"$TITLE\""
+
+    # Make socket accessible to www-data (Apache CGI) for link navigation
+    chmod 777 "$SOCKET"
+    # Grant tmux server access to www-data (Apache user)
+    tmux -S "$SOCKET" server-access -a -w www-data
     
     # Configure Prefix (C-k instead of C-b) to avoid conflict with outer tmux
     tmux -S "$SOCKET" set-option -g prefix C-k
@@ -67,7 +73,13 @@ if [ -z "$WIKIM_ISOLATED" ]; then
     
     # Split window. Note: We must pass MAIN_PANE so selector knows what to respawn.
     tmux -S "$SOCKET" split-window -h -l 25% "$SELECTOR_CMD $MAIN_PANE \"$TITLE\""
-    
+
+    # Get the selector pane ID (it's the newly created pane, so it's the last one)
+    SELECTOR_PANE=$(tmux -S "$SOCKET" list-panes -F "#{pane_id}" | tail -n1)
+
+    # Now respawn the main pane with wikim context so link clicks can update selector
+    tmux -S "$SOCKET" respawn-pane -k -t "$MAIN_PANE" "$WIKI_CMD --wikim-socket \"$SOCKET\" --wikim-selector-pane \"$SELECTOR_PANE\" --wikim-main-pane \"$MAIN_PANE\" \"$TITLE\""
+
     # Attach and block until session ends
     tmux -S "$SOCKET" attach-session
     

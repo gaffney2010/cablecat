@@ -8,6 +8,9 @@ import os
 def main():
     parser = argparse.ArgumentParser(description="Rewrite wikilinks to CGI jump scripts.")
     parser.add_argument("file", help="HTML file to process")
+    parser.add_argument("--wikim-socket", help="Tmux socket path for wikim mode")
+    parser.add_argument("--wikim-selector-pane", help="Selector pane ID for wikim mode")
+    parser.add_argument("--wikim-main-pane", help="Main pane ID for wikim mode")
     args = parser.parse_args()
 
     if not os.path.exists(args.file):
@@ -33,7 +36,13 @@ def main():
                 if not href.startswith(("http:", "https:", "ftp:", "mailto:")):
                     quoted_href = urllib.parse.quote(href)
                     # Use localhost URL to point to CGI
-                    a["href"] = f"http://localhost:{port}/cgi-bin/cablecat_jump.cgi?target={quoted_href}"
+                    cgi_url = f"http://localhost:{port}/cgi-bin/cablecat_jump.cgi?target={quoted_href}"
+                    # Add wikim context if present
+                    if args.wikim_socket:
+                        cgi_url += f"&socket={urllib.parse.quote(args.wikim_socket)}"
+                        cgi_url += f"&selector_pane={urllib.parse.quote(args.wikim_selector_pane)}"
+                        cgi_url += f"&main_pane={urllib.parse.quote(args.wikim_main_pane)}"
+                    a["href"] = cgi_url
         
         with open(args.file, "w", encoding="utf-8") as f:
             f.write(str(soup))
