@@ -1,0 +1,23 @@
+[project]
+name = "lemmy-tui"
+version = "0.1.0"
+description = "A simple TUI for browsing Lemmy"
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=0.40.0",
+    "httpx",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
